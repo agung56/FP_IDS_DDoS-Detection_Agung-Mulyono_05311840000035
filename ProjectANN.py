@@ -14,7 +14,8 @@ def main():
         print(__doc__)
         int = netifaces.interfaces()
         mlp_live_iteration = 0
-        allowed_IP = ['192.168.1.1', '192.168.1.2', '192.168.1.3', '192.168.1.4'] 
+        allowed_IP = ['192.168.1.1', '192.168.1.79', '192.168.1.66', '192.168.1.72']
+        #cap = pyshark.FileCapture('test.pcap') # For training 
 
         def get_ip_layer_name(pkt): #allows the program to differentiate between ipv4 and ipv6, needed for correct parsing of packets
             for layer in pkt.layers:
@@ -77,7 +78,7 @@ def main():
             with open('Data.csv', 'w', newline='') as csvfile:
                 filewriter = csv.writer(csvfile, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
                 filewriter.writerow(
-                    ['Highest Layer', 'Transport Layer', 'Source IP', 'Destination IP', 'Source Port', 'Destination Port',
+                    ['Highest Layer', 'Transport Layer', 'Source IP', 'Dest IP', 'Source Port', 'Dest Port',
                      'Packet Length', 'Packets/Time', 'target'])
 
                 i = 0
@@ -89,15 +90,15 @@ def main():
                                     ip = None
                                     ip_layer = get_ip_layer_name(pkt)
                                     if ip_layer == 4:
-                                        ip = pkt.ipv4
-                                        #ipv = 0  # target test
+                                        ip = pkt.ip
+                                        ipv = 0  # target test
                                         if pkt.transport_layer == None:
                                             transport_layer = 'None'
                                         else:
                                             transport_layer = pkt.transport_layer
                                     elif ip_layer == 6:
                                         ip = pkt.ipv6
-                                        #ipv = 1  # target test
+                                        ipv = 1  # target test
 
                                     try:
                                         if ip.src not in allowed_IP:
@@ -110,11 +111,13 @@ def main():
                                                              pkt[pkt.transport_layer].srcport,
                                                              pkt[pkt.transport_layer].dstport,
                                                              pkt.length, i / (time.time() - start_time), target])
+                                        #print("Time: ", time.time() - start_time)
+                                        #print("Packets Collected:", i)
                                         i += 1
                                     except AttributeError:
                                         if ip.src not in allowed_IP:
-                                            ipcat = ip.src#1
-                                            target = ip.dst#1
+                                            ipcat = 1
+                                            target = 1
                                         else:
                                             ipcat = 0
                                             target = 0
@@ -127,8 +130,8 @@ def main():
 
                                 else:
                                     if pkt.arp.src_proto_ipv4 not in allowed_IP:
-                                        ipcat = ip.src#1
-                                        target = ip.src#1
+                                        ipcat = 1
+                                        target = 1
                                     else:
                                         ipcat = 0
                                         target = 0
@@ -208,7 +211,7 @@ def main():
 
             l_data = input("Name of CSV file? ") # User inputs name of Dataset CSV file
             
-            load = input("Load model?") # Asks user if they want to train a saved algorithm, if no, new model is created and trained
+            load = input("Load model?") # Asks user if thye want to train a saved algorithm, if no, new model is created and trained
             if load == 'y':
                 mlp = Load_model()
 
@@ -234,17 +237,9 @@ def main():
             from sklearn.model_selection import train_test_split #Needed to split the data into the training and testing
             from sklearn.preprocessing import StandardScaler #required to so that all the inputs are in a comparable range
             X_train, X_test, y_train, y_test = train_test_split(X, y)
-            #scaler = StandardScaler()
-            
-            #scaler.fit(X_train)
-            #X_train = scaler.transform(X_train)
-            #X_test = scaler.transform(X_test)
-            
-            #print(X_train) # Training data (Features)
-            #print(X_test) # Testing data (features
+           
             start_time = timer()
             mlp.fit(X_train, y_train) # fit is used to actually train the model
-            #print(mlp.predict(X_test))
             end_time = timer()
             time_taken = end_time - start_time
             predictions = mlp.predict(X_test)
@@ -292,16 +287,12 @@ def main():
             data = LiveLabelEncoding(data)
             print("Processing Data", "\n")
             print(data)
-            X = data[['Highest Layer', 'Transport Layer', 'Source IP', 'Destination IP', 'Source Port', 'Destination Port','Packet Length', 'Packets/Time' ]] # Data used to train
+            X = data[['Highest Layer', 'Transport Layer', 'Source IP', 'Dest IP', 'Source Port', 'Dest Port','Packet Length', 'Packets/Time' ]] # Data used to train
 
             from sklearn.preprocessing import StandardScaler
-            #scaler = StandardScaler()
-            #scaler.fit(X)
-            #X = scaler.transform(X)
 
             loaded_model = pickle.load(open(modelname, 'rb')) # loads model
-            #print("Model Coeffcients ", loaded_model.coefs_) # load model coefs
-
+            
             lmlp = loaded_model
 
             predictions = lmlp.predict(X) # preditcions made by model
@@ -338,13 +329,13 @@ def main():
                 testwrite.write('\n \n')
 
                 return mlp_live_iteration
-
+            
 
         def csv_interval_gather(cap): # creates/rewrites 'Live.csv' file with 30 second intervals- writes header row - goes through packets, writing a row to the csv for each packet
             start_time = time.time()
             with open ('LiveAnn.csv', 'w', newline='') as csvfile:
                 filewriter = csv.writer(csvfile, delimiter=',' , quotechar='|', quoting=csv.QUOTE_MINIMAL)
-                filewriter.writerow(['Highest Layer', 'Transport Layer', 'Source IP', 'Destination IP', 'Source Port', 'Destination Port','Packet Length', 'Packets/Time'])
+                filewriter.writerow(['Highest Layer', 'Transport Layer', 'Source IP', 'Dest IP', 'Source Port', 'Dest Port','Packet Length', 'Packets/Time'])
 
                 i = 0
                 start = timer()
@@ -439,16 +430,13 @@ def main():
                 elif ans == "5":
                     cap = int_choice()
                     modelname = input("Please input model: ")
-
                     try:
                         while live:                                      
                             csv_interval_gather(cap)
                             if MLP_Live_predict(cap, modelname, mlp_live_iteration) == "Attack": #if an attack had been detectedm then print date and time of the attack
                                 live = False
-                                print("DDoS ATTACK DETECTED!  ", datetime.datetime.now().strftime("%Y-%m-%d %H:%M"))
+                                print("DDoS ATTACK DETECTED! @ ", datetime.datetime.now().strftime("%Y-%m-%d %H:%M"))
                                 MLP_Live_predict(cap, modelname, mlp_live_iteration) == 0
-                            else:
-                                print("No DDoS Detected")
                     except KeyboardInterrupt:
                         pass                            
                 elif ans == "6":
